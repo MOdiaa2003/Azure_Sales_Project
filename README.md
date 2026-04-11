@@ -328,7 +328,7 @@ An HTTP linked service is configured in Azure Data Factory pointing to `raw.gith
 
 The source dataset is configured as a **delimited text file**, reading `SalesData.csv` directly from the GitHub raw content URL.
 
-![GitHub Source Dataset](images/initial_load/github_source.png)
+![GitHub Source Dataset](images/intial_load/github_source.png)
 
 ---
 
@@ -336,7 +336,7 @@ The source dataset is configured as a **delimited text file**, reading `SalesDat
 
 The sink is connected to the Azure SQL Database through a dedicated SQL linked service, pointing to the target database.
 
-![Database Linked Service](images/initial_load/db_linked_service.png)
+![Database Linked Service](images/intial_load/db_linked_service.png)
 
 ---
 
@@ -360,7 +360,7 @@ CREATE TABLE car_sales_source (
 );
 ```
 
-![Create SQL Table](images/initial_load/creating_table.png)
+![Create SQL Table](images/intial_load/creating_table.png)
 
 ---
 
@@ -368,7 +368,7 @@ CREATE TABLE car_sales_source (
 
 The sink dataset is configured to point to the `car_sales_source` table in Azure SQL Database.
 
-![SQL Sink Dataset](images/initial_load/db_sink.png)
+![SQL Sink Dataset](images/intial_load/db_sink.png)
 
 ---
 
@@ -376,11 +376,11 @@ The sink dataset is configured to point to the `car_sales_source` table in Azure
 
 The initial load pipeline runs successfully, copying all records from the CSV into the SQL table.
 
-![Initial Load Pipeline Run](images/initial_load/initial_load_db.png)
+![Initial Load Pipeline Run](images/intial_load/initial_load_db.png)
 
 After the run, the table is populated with all sales records:
 
-![Table After Initial Load](images/initial_load/table_after_initial_load.png)
+![Table After Initial Load](images/intial_load/table_after_initial_load.png)
 
 ---
 
