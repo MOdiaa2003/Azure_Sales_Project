@@ -78,7 +78,7 @@ The project highlights both engineering best practices (incremental loading, med
 ---
 
 ## 🏗 Architecture
-
+(images/ARCH.png)
 ```
 ┌─────────────┐     ┌─────────────────────┐     ┌───────────────────┐
 │  GitHub     │────▶│  Azure Data Factory  │────▶│  Azure SQL        │
@@ -320,7 +320,7 @@ The first pipeline loads the raw sales data from a CSV file hosted on GitHub int
 
 An HTTP linked service is configured in Azure Data Factory pointing to `raw.githubusercontent.com` where the source CSV files live.
 
-![GitHub Linked Service](images/initial_load/github_linked_service.png)
+![GitHub Linked Service](images/intial_load/github_linked_service.png)
 
 ---
 
