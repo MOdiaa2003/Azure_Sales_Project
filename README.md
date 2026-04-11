@@ -6,8 +6,10 @@
 
 ## 📌 Table of Contents
 
+- [Business Problem & Solution](#-business-problem--solution)
 - [Project Overview](#-project-overview)
 - [Architecture](#-architecture)
+- [Data Engineering Techniques](#-data-engineering-techniques)
 - [Technologies Used](#-technologies-used)
 - [Folder Structure](#-folder-structure)
 - [Pipeline Walkthrough](#-pipeline-walkthrough)
@@ -19,6 +21,45 @@
 - [Star Schema Model](#-star-schema-model)
 - [Business Value](#-business-value)
 - [How to Run](#-how-to-run)
+
+---
+
+## 🔴 Business Problem & Solution
+
+### The Problem
+
+Car dealership networks operate across multiple **branches**, **dealers**, and **vehicle model lines** — each generating daily sales transactions. In most organizations at this stage, this data lives in raw operational systems and CSV exports with no unified view. This creates serious pain points:
+
+| Pain Point | Impact |
+|------------|--------|
+| **Scattered, siloed data** | Sales data is spread across branches with no single source of truth |
+| **No historical tracking** | When a dealer's name or branch changes, old records are overwritten — losing history |
+| **Full reloads on every refresh** | Without an incremental strategy, re-ingesting all data daily is slow, costly, and wasteful |
+| **Raw data is not analytics-ready** | Operational columns like `Model_ID = "SUV-001"` mean nothing to a business analyst |
+| **No consistent metrics** | KPIs like revenue per unit, monthly trends, and model performance are calculated ad-hoc in spreadsheets — inconsistently |
+| **BI tools can't query raw data efficiently** | Flat transactional tables are too slow and unstructured for dashboards and slice-and-dice analysis |
+
+> Without a proper data engineering pipeline, the business is flying blind — unable to answer questions like *"Which dealer drove the most revenue last quarter?"* or *"Which car category is declining?"* with confidence or speed.
+
+---
+
+### The Solution — What This Project Does
+
+This project builds a **modern cloud data pipeline on Azure** that solves each of these problems end to end:
+
+```
+PROBLEM                             SOLUTION APPLIED
+──────────────────────────────────────────────────────────────────────────
+Scattered raw CSV data          →   Azure Data Factory ingests & centralizes
+Full reloads every refresh      →   Watermark-based incremental loading
+No history on dimension changes →   Slowly Changing Dimensions (SCD Type 1 & 2)
+Raw IDs not meaningful          →   Silver layer derives model_category, Revperunit
+No consistent KPIs              →   Gold layer bakes metrics into Fact_Sales
+BI tools can't query raw data   →   Star Schema with surrogate keys for fast joins
+No orchestration or order       →   Databricks Workflow ensures correct run order
+```
+
+By the end of the pipeline, a Power BI developer or analyst can connect directly to the Gold layer and immediately answer business questions — with no manual SQL, no spreadsheet gymnastics, and no guesswork.
 
 ---
 
@@ -68,6 +109,150 @@ The project highlights both engineering best practices (incremental loading, med
 | **Transformation** | Azure Databricks / PySpark | Silver & Gold layer notebooks |
 | **Storage** | ADLS Gen2 | Stores all layers (bronze/silver/gold) |
 | **Output** | Star Schema Tables | Fact + Dimension tables for analytics |
+
+---
+
+## 🧠 Data Engineering Techniques
+
+This project applies several industry-standard data engineering concepts. Understanding these techniques is key to appreciating *why* the pipeline is designed the way it is.
+
+---
+
+### 1. 📥 Incremental Loading (Watermark Pattern)
+
+**What it is:** Instead of reloading the entire dataset every time the pipeline runs, incremental loading fetches *only the new or changed records* since the last successful run.
+
+**Why it matters:** Imagine your sales database grows by thousands of records daily. Doing a full reload every night means copying millions of rows repeatedly — wasting compute, time, and money.
+
+**How it works in this project:**
+
+```
+First Run (Initial Load)
+──────────────────────────────────────────────────────
+  ┌──────────────────────────────────────────────┐
+  │  Load ALL records from car_sales_source      │
+  │  Set watermark = MAX(Date_ID) from loaded    │
+  │  data e.g. watermark = '2024-01-31'          │
+  └──────────────────────────────────────────────┘
+
+Next Run (Incremental Load)
+──────────────────────────────────────────────────────
+  ┌──────────────────────────────────────────────┐
+  │  Read watermark = '2024-01-31'               │
+  │  Query: WHERE Date_ID > '2024-01-31'         │
+  │  Copy ONLY those new records                 │
+  │  Update watermark = new MAX(Date_ID)         │
+  └──────────────────────────────────────────────┘
+```
+
+**In the pipeline:** The watermark is stored in an Azure SQL table. A stored procedure (`usp_update_watermark`) updates it atomically after each successful copy — making the pipeline safe to re-run without double-loading data.
+
+---
+
+### 2. ⭐ Star Schema Data Model
+
+**What it is:** A dimensional modeling pattern where a central **Fact table** (containing measurable events) is surrounded by **Dimension tables** (containing descriptive context). It looks like a star when drawn — hence the name.
+
+**Why it matters:** Flat transactional tables are hard for BI tools to query efficiently. A star schema dramatically simplifies queries, speeds up aggregations, and makes the data intuitive for analysts.
+
+**Fact vs. Dimension — the key distinction:**
+
+| Concept | Fact Table | Dimension Table |
+|---------|------------|-----------------|
+| **Contains** | Measurable events (what happened) | Descriptive attributes (who, what, where, when) |
+| **Example** | A sale of 3 units for $45,000 | The branch named "Cairo North" |
+| **Changes** | Grows with every new transaction | Grows slowly — new dealers, new models |
+| **Used for** | Aggregations: SUM, COUNT, AVG | Filtering and grouping |
+
+**In this project:**
+
+```
+Fact_Sales          ← "A sale happened: $45,000 revenue, 3 units, by dealer X at branch Y"
+Dim_Branch          ← "Branch Y is located in Cairo, called Cairo North"
+Dim_Dealer          ← "Dealer X is named Ahmed Motors"
+Dim_Model           ← "Model Z is an SUV category vehicle"
+Dim_Date            ← "This happened on January 15, 2024 — Month 1, Year 2024"
+```
+
+A single Power BI query like *"Total revenue by branch and model category for Q1 2024"* becomes a clean, fast JOIN across these tables — something impossible to do efficiently on raw flat data.
+
+---
+
+### 3. 🔑 Surrogate Keys in Data Warehousing
+
+**What it is:** A surrogate key is a **system-generated, meaningless integer** used as the primary key in a dimension table — instead of using the natural business key (like `Branch_ID = "BR-042"`).
+
+**Why it matters:** Natural/business keys are fragile. They can change, contain duplicates across systems, or carry business logic that shouldn't live in the warehouse. Surrogate keys give the warehouse full control.
+
+**The problem with natural keys:**
+
+```
+NATURAL KEY PROBLEM
+─────────────────────────────────────────────────────
+Branch_ID = "BR-042"  ← What if the source system changes this ID?
+                         What if two source systems both have "BR-042"?
+                         What if this branch closes and a new one reuses the ID?
+
+SURROGATE KEY SOLUTION
+─────────────────────────────────────────────────────
+branch_sk = 1001      ← Warehouse-assigned, never changes, never reused
+Branch_ID = "BR-042"  ← Kept as a reference column, not the primary key
+BranchName = "Cairo North"
+```
+
+**In this project:** Each Gold dimension table is assigned a surrogate key (`branch_sk`, `dealer_sk`, `model_sk`, `date_sk`) generated in the Databricks notebooks. The Fact table references these surrogate keys as foreign keys — not the raw business IDs. This decouples the warehouse from source system changes.
+
+---
+
+### 4. 🔄 Slowly Changing Dimensions (SCD)
+
+**What it is:** A strategy for handling changes to dimension data over time. When a dealer changes their name, or a branch moves to a new city — what should happen to the historical sales records that referenced the old values?
+
+**Why it matters:** Without SCD logic, you either lose history (overwrite the old value) or can't track changes at all. In a sales analytics context, this could mean your 2022 revenue reports suddenly show a dealer name that didn't exist in 2022 — corrupting historical analysis.
+
+**The three most common types:**
+
+```
+SCD TYPE 1 — Overwrite (No History Kept)
+───────────────────────────────────────────────────────────────
+  BEFORE: DealerName = "Ahmed Motors"
+  AFTER:  DealerName = "Ahmed Premium Motors"   ← Old name is gone forever
+  USE WHEN: The change is a correction, not a real business event
+
+SCD TYPE 2 — Full History (New Row for Each Change)
+───────────────────────────────────────────────────────────────
+  dealer_sk | Dealer_ID | DealerName           | EffectiveDate | ExpiryDate  | IsCurrent
+  ──────────────────────────────────────────────────────────────────────────────────────
+  1001      | D-05      | Ahmed Motors         | 2022-01-01    | 2023-06-30  | False
+  1002      | D-05      | Ahmed Premium Motors | 2023-07-01    | 9999-12-31  | True
+  USE WHEN: You need to know what the dealer was called AT THE TIME of each sale
+
+SCD TYPE 3 — Previous Value Column
+───────────────────────────────────────────────────────────────
+  DealerName = "Ahmed Premium Motors"
+  PreviousDealerName = "Ahmed Motors"
+  USE WHEN: You only care about the current and one previous value
+```
+
+**In this project:** The Gold layer dimension notebooks implement **SCD Type 1** for simple attribute corrections (e.g., fixing a branch name typo) and **SCD Type 2** for tracking meaningful business changes — using `EffectiveDate`, `ExpiryDate`, and `IsCurrent` flag columns. The incremental flag in each notebook controls whether new rows are inserted or existing ones expired and replaced.
+
+---
+
+### 5. 🥉🥈🥇 Medallion Architecture (Bronze / Silver / Gold)
+
+**What it is:** A layered data lake design pattern where data is progressively refined across three zones.
+
+**Why it matters:** It separates raw ingestion from transformation from analytics — so failures at any stage don't corrupt the final model, and each layer can be reprocessed independently.
+
+```
+BRONZE (Raw)      →    SILVER (Cleaned)    →    GOLD (Modeled)
+────────────────────────────────────────────────────────────────
+Exact copy of           Cleaned, enriched,       Star schema —
+source data.            standardized.            Fact + Dimensions.
+No transformations.     model_category           Ready for Power BI.
+Parquet format.         Revperunit added.        Surrogate keys.
+Append-only.            Schema validated.        SCD logic applied.
+```
 
 ---
 
