@@ -1,149 +1,109 @@
-# Azure Sales Project
+# 🚀 Azure Sales Data Engineering Project
 
-An end-to-end Azure data engineering project that ingests raw sales data, loads it into an Azure SQL database, processes it through a bronze/silver/gold-style pipeline in Databricks, and builds a star-schema model with fact and dimension tables.
-
----
-
-## Project Overview
-
-This project demonstrates a full data engineering workflow for sales analytics:
-
-1. **Initial load** of source CSV data into **Azure SQL Database** using **Azure Data Factory**.
-2. **Incremental ingestion** using a watermark-based pipeline.
-3. **Bronze / Silver / Gold transformation layers** in **Databricks / PySpark**.
-4. Creation of a final **sales analytical model** with:
-
-   * `Fact_Sales`
-   * `Dim_Branch`
-   * `Dim_Dealer`
-   * `Dim_Model`
-   * `Dim_Date`
-
-The goal is to turn raw operational sales data into a clean analytics-ready structure for reporting and dashboarding.
+> **An end-to-end Azure data engineering pipeline** that ingests raw sales data, processes it through a Medallion architecture (Bronze → Silver → Gold), and delivers a clean star-schema analytical model ready for BI reporting.
 
 ---
 
-## Architecture
+## 📌 Table of Contents
 
-The pipeline follows a clear data flow:
-
-**GitHub CSV files → Azure Data Factory → Azure SQL Database → Databricks Silver Layer → Databricks Gold Layer → Analytics Model**
-
-At a high level:
-
-* **GitHub** stores the source CSV files.
-* **Azure Data Factory** copies the source data into Azure SQL for the initial load.
-* A **watermark table** tracks the latest processed value for incremental loading.
-* **Databricks notebooks** read the refined data, transform it, and write the final tables.
-
----
-
-## What Was Built
-
-### 1) Source Data and Initial Load
-
-The repository includes source files inside `Raw_Data`:
-
-* `SalesData.csv`
-* `IncrementalSales.csv`
-
-For the first load, a SQL table named **`car_sales_source`** was created with columns such as:
-
-* `Branch_ID`
-* `Dealer_ID`
-* `Model_ID`
-* `Revenue`
-* `Units_Sold`
-* `Date_ID`
-* `Day`
-* `Month`
-* `Year`
-* `BranchName`
-* `DealerName`
-
-The initial-load pipeline in Azure Data Factory uses:
-
-* a **GitHub linked service** as the source
-* an **Azure SQL Database linked service** as the sink
-* a **Copy Data** activity to move the data
-
-### 2) Incremental Load Strategy
-
-To support refreshes after the initial load, the project uses a **watermark table** and a **stored procedure**.
-
-The incremental pipeline:
-
-* reads the **last load** value from the watermark table
-* gets the **current load** value
-* copies only the new records
-* updates the watermark using a stored procedure
-
-This makes the pipeline scalable and avoids reloading the same data repeatedly.
-
-### 3) Silver Layer Transformation
-
-In the silver notebook, the raw parquet data is read from ADLS Gen2 and cleaned for downstream processing.
-
-Key transformations include:
-
-* reading data from the bronze/raw path
-* creating a new column `model_category` from `Model_ID`
-* calculating `Revperunit` as `Revenue / Units_Sold`
-* saving the transformed dataset into the silver layer path
-
-### 4) Gold Layer Modeling
-
-The gold notebooks create the final analytical model.
-
-This includes:
-
-* **Fact table** for sales measures
-* **Dimension tables** for branch, dealer, model, and date
-* incremental logic controlled through a Databricks widget called `incremental_flag`
-
-The model is designed to support reporting, slicing, and aggregation by business dimensions.
+- [Project Overview](#-project-overview)
+- [Architecture](#-architecture)
+- [Technologies Used](#-technologies-used)
+- [Folder Structure](#-folder-structure)
+- [Pipeline Walkthrough](#-pipeline-walkthrough)
+  - [1. Initial Load Pipeline](#1-initial-load-pipeline)
+  - [2. Incremental Load Pipeline](#2-incremental-load-pipeline)
+  - [3. Silver Layer Transformation](#3-silver-layer-transformation)
+  - [4. Gold Layer Modeling](#4-gold-layer-modeling)
+  - [5. Databricks Workflow Orchestration](#5-databricks-workflow-orchestration)
+- [Star Schema Model](#-star-schema-model)
+- [Business Value](#-business-value)
+- [How to Run](#-how-to-run)
 
 ---
 
-## Notebook Structure
+## 📖 Project Overview
 
-* `silver_notebook.ipynb` → prepares the silver layer data
-* `gold_fact_sales.ipynb` → builds the fact table
-* `gold_dim_branch.ipynb` → builds branch dimension
-* `gold_dim_date.ipynb` → builds date dimension
-* `gold_dim_dealer.ipynb` → builds dealer dimension
-* `gold_dim_model.ipynb` → builds model dimension
+This project demonstrates a **production-style data engineering workflow** built entirely on Azure services. It simulates a real-world scenario where raw operational car sales data is:
 
----
+1. Ingested from CSV source files into **Azure SQL Database** via **Azure Data Factory**
+2. Incrementally refreshed using a **watermark-based strategy**
+3. Transformed through **Bronze → Silver → Gold** layers in **Azure Databricks**
+4. Modeled into a **star schema** with Fact and Dimension tables
+5. Made ready for consumption by **Power BI** or any other BI tool
 
-## Technologies Used
-
-* **Azure Data Factory**
-* **Azure SQL Database**
-* **Azure Databricks**
-* **Apache Spark / PySpark**
-* **Azure Data Lake Storage Gen2**
-* **GitHub**
-* **Jupyter Notebooks**
+The project highlights both engineering best practices (incremental loading, medallion architecture, reusable notebooks) and a clean analytical output model.
 
 ---
 
-## Folder Structure
+## 🏗 Architecture
 
-```text
+```
+┌─────────────┐     ┌─────────────────────┐     ┌───────────────────┐
+│  GitHub     │────▶│  Azure Data Factory  │────▶│  Azure SQL        │
+│  CSV Files  │     │  (Copy Activity)     │     │  Database         │
+└─────────────┘     └─────────────────────┘     └────────┬──────────┘
+                                                          │
+                                                          ▼
+                                               ┌──────────────────────┐
+                                               │   ADLS Gen2          │
+                                               │   (Bronze / Raw)     │
+                                               └────────┬─────────────┘
+                                                        │
+                              ┌─────────────────────────┼──────────────────────────┐
+                              ▼                         ▼                          ▼
+                    ┌──────────────────┐    ┌───────────────────┐    ┌─────────────────────┐
+                    │  Silver Layer    │    │   Gold Layer       │    │  Analytics Model    │
+                    │  (Cleaned Data)  │───▶│  (Star Schema)    │───▶│  Power BI / Reports │
+                    └──────────────────┘    └───────────────────┘    └─────────────────────┘
+```
+
+### Data Flow Summary
+
+| Stage | Tool | Description |
+|-------|------|-------------|
+| **Source** | GitHub | Raw CSV files (`SalesData.csv`, `IncrementalSales.csv`) |
+| **Ingestion** | Azure Data Factory | Copy activity from GitHub → Azure SQL |
+| **Incremental Tracking** | Azure SQL (Watermark Table) | Tracks last processed value |
+| **Transformation** | Azure Databricks / PySpark | Silver & Gold layer notebooks |
+| **Storage** | ADLS Gen2 | Stores all layers (bronze/silver/gold) |
+| **Output** | Star Schema Tables | Fact + Dimension tables for analytics |
+
+---
+
+## 🛠 Technologies Used
+
+| Technology | Purpose |
+|------------|---------|
+| **Azure Data Factory** | Pipeline orchestration, data ingestion |
+| **Azure SQL Database** | Source staging area & watermark tracking |
+| **Azure Databricks** | PySpark transformations, Silver & Gold layers |
+| **Apache Spark / PySpark** | Distributed data processing |
+| **Azure Data Lake Storage Gen2** | Scalable storage for all pipeline layers |
+| **GitHub** | Source CSV file hosting & version control |
+| **Jupyter Notebooks** | Databricks notebook development |
+| **Power BI** *(ready)* | Final BI consumption layer |
+
+---
+
+## 📁 Folder Structure
+
+```
 Azure_Sales_Project/
+│
 ├── Raw_Data/
-│   ├── SalesData.csv
-│   └── IncrementalSales.csv
+│   ├── SalesData.csv               ← Initial load source data
+│   └── IncrementalSales.csv        ← Incremental refresh source data
+│
 ├── images/
 │   ├── DB_external_location.png
 │   ├── DB_workflow.png
-│   ├── creating_waermark_table.png
-│   ├── incremental_pipline.png
-│   ├── storage_credentail.png
+│   ├── creating_watermark_table.png
+│   ├── incremental_pipeline.png
+│   ├── storage_credential.png
 │   ├── stored_procedure.png
 │   ├── stored_procedure_activity.png
-│   └── intial_load/
+│   └── initial_load/
 │       ├── creating_table.png
 │       ├── db_linked_service.png
 │       ├── db_sink.png
@@ -151,214 +111,389 @@ Azure_Sales_Project/
 │       ├── github_source.png
 │       ├── initial_load_db.png
 │       └── table_after_initial_load.png
+│
 └── notebook/
-    ├── silver_notebook.ipynb
-    ├── gold_fact_sales.ipynb
-    ├── gold_dim_branch.ipynb
-    ├── gold_dim_date.ipynb
-    ├── gold_dim_dealer.ipynb
-    └── gold_dim_model.ipynb
+    ├── silver_notebook.ipynb        ← Bronze → Silver transformation
+    ├── gold_fact_sales.ipynb        ← Builds Fact_Sales table
+    ├── gold_dim_branch.ipynb        ← Builds Dim_Branch table
+    ├── gold_dim_date.ipynb          ← Builds Dim_Date table
+    ├── gold_dim_dealer.ipynb        ← Builds Dim_Dealer table
+    └── gold_dim_model.ipynb         ← Builds Dim_Model table
 ```
 
 ---
 
-## Detailed Pipeline Walkthrough
+## 🔄 Pipeline Walkthrough
 
-## 1. Initial Load Pipeline
+### 1. Initial Load Pipeline
 
-The first pipeline loads the raw sales CSV from GitHub into Azure SQL Database.
-
-### Source Linked Service
-
-The source is connected through an HTTP linked service pointing to `raw.githubusercontent.com`.
-
-![GitHub linked service](./images/intial_load/github_linked_service.png)
-
-### Source Dataset
-
-The source dataset is configured as a delimited text file.
-
-![GitHub source dataset](./images/intial_load/github_source.png)
-
-### SQL Linked Service
-
-The sink is connected to the Azure SQL Database through a SQL linked service.
-
-![Database linked service](./images/intial_load/db_linked_service.png)
-
-### SQL Table Creation
-
-The target table `car_sales_source` is created with the required columns.
-
-![Create SQL table](./images/intial_load/creating_table.png)
-
-### Sink Dataset
-
-The sink dataset points to the target SQL table.
-
-![SQL sink dataset](./images/intial_load/db_sink.png)
-
-### Pipeline Execution
-
-The initial load pipeline runs successfully and copies the data into the SQL database.
-
-![Initial load pipeline run](./images/intial_load/initial_load_db.png)
-
-### Loaded Table
-
-After the load, the table contains the inserted sales records.
-
-![Table after initial load](./images/intial_load/table_after_initial_load.png)
+The first pipeline loads the raw sales data from a CSV file hosted on GitHub into Azure SQL Database.
 
 ---
 
-## 2. Incremental Load Pipeline
+#### 🔗 Step 1 — GitHub Linked Service
 
-The incremental design avoids full reloads by using a watermark-based approach.
+An HTTP linked service is configured in Azure Data Factory pointing to `raw.githubusercontent.com` where the source CSV files live.
 
-### External Location and Storage Credential
-
-Databricks is connected to ADLS Gen2 through an external location and storage credential.
-
-![External location](./images/DB_external_location.png)
-
-![Storage credential](./images/storage_credentail.png)
-
-### Watermark and Stored Procedure
-
-A watermark table is used to store the latest processed load value.
-The stored procedure updates that watermark after a successful run.
-
-![Stored procedure SQL](./images/stored_procedure.png)
-
-![Stored procedure activity in pipeline](./images/stored_procedure_activity.png)
-
-### Incremental Pipeline Run
-
-The pipeline reads the last watermark, loads only new data, and then updates the watermark.
-
-![Incremental pipeline](./images/incremental_pipline.png)
+![GitHub Linked Service](images/initial_load/github_linked_service.png)
 
 ---
 
-## 3. Databricks Workflow
+#### 📄 Step 2 — Source Dataset (GitHub CSV)
 
-The Databricks job orchestrates the notebooks in the correct order:
+The source dataset is configured as a **delimited text file**, reading `SalesData.csv` directly from the GitHub raw content URL.
 
-1. `silver_notebook`
-2. `gold_dim_branch`
-3. `gold_dim_date`
-4. `gold_dim_dealer`
-5. `gold_dim_model`
-6. `gold_fact_sales`
-
-This creates the full analytical model in a single workflow.
-
-![Databricks workflow](./images/DB_workflow.png)
+![GitHub Source Dataset](images/initial_load/github_source.png)
 
 ---
 
-## Silver Layer Logic
+#### 🗄 Step 3 — Azure SQL Linked Service
 
-The silver notebook performs the first transformation pass.
+The sink is connected to the Azure SQL Database through a dedicated SQL linked service, pointing to the target database.
 
-### Main steps
+![Database Linked Service](images/initial_load/db_linked_service.png)
 
-* Read parquet data from the bronze/raw storage path
-* Inspect schema and sample records
-* Derive `model_category` from `Model_ID`
-* Calculate `Revperunit`
-* Write the cleaned data to the silver path
+---
 
-### Example transformation
+#### 🏗 Step 4 — SQL Table Creation
+
+Before running the pipeline, the target table `car_sales_source` is created in Azure SQL with the following schema:
+
+```sql
+CREATE TABLE car_sales_source (
+    Branch_ID    VARCHAR(50),
+    Dealer_ID    VARCHAR(50),
+    Model_ID     VARCHAR(50),
+    Revenue      FLOAT,
+    Units_Sold   INT,
+    Date_ID      VARCHAR(50),
+    Day          INT,
+    Month        INT,
+    Year         INT,
+    BranchName   VARCHAR(100),
+    DealerName   VARCHAR(100)
+);
+```
+
+![Create SQL Table](images/initial_load/creating_table.png)
+
+---
+
+#### 🎯 Step 5 — Sink Dataset
+
+The sink dataset is configured to point to the `car_sales_source` table in Azure SQL Database.
+
+![SQL Sink Dataset](images/initial_load/db_sink.png)
+
+---
+
+#### ▶ Step 6 — Pipeline Execution & Result
+
+The initial load pipeline runs successfully, copying all records from the CSV into the SQL table.
+
+![Initial Load Pipeline Run](images/initial_load/initial_load_db.png)
+
+After the run, the table is populated with all sales records:
+
+![Table After Initial Load](images/initial_load/table_after_initial_load.png)
+
+---
+
+### 2. Incremental Load Pipeline
+
+To support ongoing data refreshes without reloading all historical data, the project uses a **watermark-based incremental pattern**.
+
+---
+
+#### 🌊 How the Watermark Pattern Works
+
+```
+┌─────────────────────┐
+│  Read last watermark │  ← Get LastLoadValue from watermark table
+│  from SQL table      │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Get current max    │  ← Query source for current max value
+│  value from source  │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Copy only NEW      │  ← Load records where value > LastLoadValue
+│  records            │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Update watermark   │  ← Call stored procedure to save new watermark
+│  via stored proc    │
+└─────────────────────┘
+```
+
+---
+
+#### 🔐 Step 1 — External Location & Storage Credential
+
+Databricks is connected to ADLS Gen2 via an **external location** and **storage credential**, enabling secure access to the data lake.
+
+![External Location](images/DB_external_location.png)
+
+![Storage Credential](images/storage_credentail.png)
+
+---
+
+#### 📊 Step 2 — Watermark Table
+
+A watermark table is created in Azure SQL to track the last successfully processed load value:
+
+```sql
+CREATE TABLE watermark_table (
+    TableName       VARCHAR(255),
+    LastLoadValue   DATETIME
+);
+```
+
+![Creating Watermark Table](images/creating_waermark_table.png)
+
+---
+
+#### ⚙ Step 3 — Stored Procedure
+
+A stored procedure is created to update the watermark value after each successful pipeline run:
+
+```sql
+CREATE PROCEDURE usp_update_watermark
+    @LastLoadValue DATETIME,
+    @TableName VARCHAR(255)
+AS
+BEGIN
+    UPDATE watermark_table
+    SET LastLoadValue = @LastLoadValue
+    WHERE TableName = @TableName;
+END
+```
+
+![Stored Procedure SQL](images/stored_procedure.png)
+
+The stored procedure is wired into the pipeline as an activity that executes after the copy step:
+
+![Stored Procedure Activity](images/stored_procedure_activity.png)
+
+---
+
+#### ▶ Step 4 — Incremental Pipeline Run
+
+The incremental pipeline reads from the watermark, copies only new records, and updates the watermark — making it fully idempotent and repeatable.
+
+![Incremental Pipeline](images/incremental_pipline.png)
+
+---
+
+### 3. Silver Layer Transformation
+
+The **Silver notebook** reads raw parquet data from the Bronze path in ADLS Gen2 and applies cleaning and enrichment transformations.
+
+#### What Happens in the Silver Layer
+
+| Step | Action |
+|------|--------|
+| 1 | Read parquet data from the bronze/raw storage path |
+| 2 | Inspect schema and sample records |
+| 3 | Derive `model_category` column from `Model_ID` |
+| 4 | Calculate `Revperunit` as `Revenue / Units_Sold` |
+| 5 | Write cleaned dataset to the silver layer path in ADLS Gen2 |
+
+#### Key Transformations
 
 ```python
+# Derive model category from Model_ID (e.g., "SUV-001" → "SUV")
 df = df.withColumn('model_category', split(col('Model_ID'), '-')[0])
+
+# Calculate revenue per unit sold
 df = df.withColumn('Revperunit', col('Revenue') / col('Units_Sold'))
+
+# Write to silver path
+df.write.format("delta").mode("overwrite").save("/mnt/silver/sales/")
 ```
 
-This layer standardizes the data and prepares it for dimensional modeling.
+This layer standardizes the raw data and enriches it with derived metrics before it enters dimensional modeling.
 
 ---
 
-## Gold Layer Logic
+### 4. Gold Layer Modeling
 
-The gold layer converts the silver data into a star schema.
+The **Gold layer** converts the cleaned Silver data into a **star schema** optimized for analytics and reporting.
 
-### Fact Table
+#### Incremental Control via Databricks Widget
 
-`Fact_Sales` contains the measurable sales attributes used for analysis.
-
-### Dimension Tables
-
-* `Dim_Branch` for branch-level analysis
-* `Dim_Dealer` for dealer-level analysis
-* `Dim_Model` for car model analysis
-* `Dim_Date` for time-based analysis
-
-### Incremental Control
-
-A Databricks widget named `incremental_flag` is used to switch between initial and incremental processing.
+Each Gold notebook supports both first-time loads and incremental updates using a Databricks widget:
 
 ```python
-dbutils.widgets.text('incremental_flag','0')
+# Widget allows toggling between initial and incremental load
+dbutils.widgets.text('incremental_flag', '0')
 incremental_flag = dbutils.widgets.get('incremental_flag')
+
+if incremental_flag == '0':
+    # Initial load — write full dataset
+    df.write.format("delta").mode("overwrite").save(gold_path)
+else:
+    # Incremental — merge new records only
+    deltaTable.alias("target").merge(
+        df.alias("source"),
+        "target.id = source.id"
+    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 ```
 
-This allows the same notebook logic to support both first-time loads and subsequent updates.
+---
+
+### 5. Databricks Workflow Orchestration
+
+All notebooks are orchestrated in a single **Databricks Workflow Job** that runs them in the correct dependency order:
+
+```
+silver_notebook
+      │
+      ├──▶ gold_dim_branch
+      ├──▶ gold_dim_date
+      ├──▶ gold_dim_dealer
+      ├──▶ gold_dim_model
+      │
+      └──▶ gold_fact_sales   ← (runs last, depends on all dimensions)
+```
+
+![Databricks Workflow](images/DB_workflow.png)
+
+This ensures that all dimension tables exist before the fact table is built, maintaining referential integrity across the model.
 
 ---
 
-## Business Value
+## ⭐ Star Schema Model
 
-This project helps answer questions like:
+The final analytical model follows a classic **star schema** design:
 
-* Which branches generate the highest sales?
-* Which dealers contribute the most revenue?
-* Which car model categories perform best?
-* How do sales change over time?
-* What is the revenue per unit for each model?
+```
+                        ┌──────────────┐
+                        │  Dim_Date    │
+                        │─────────────│
+                        │ Date_ID (PK) │
+                        │ Day          │
+                        │ Month        │
+                        │ Year         │
+                        └──────┬───────┘
+                               │
+ ┌──────────────┐              │              ┌──────────────┐
+ │  Dim_Branch  │              │              │  Dim_Dealer  │
+ │─────────────│              │              │─────────────│
+ │ Branch_ID(PK)│◀─────────────┼─────────────▶│Dealer_ID(PK)│
+ │ BranchName   │              │              │ DealerName   │
+ └──────────────┘              │              └──────────────┘
+                               │
+                    ┌──────────▼───────────┐
+                    │      Fact_Sales       │
+                    │──────────────────────│
+                    │ Branch_ID  (FK)       │
+                    │ Dealer_ID  (FK)       │
+                    │ Model_ID   (FK)       │
+                    │ Date_ID    (FK)       │
+                    │ Revenue               │
+                    │ Units_Sold            │
+                    │ Revperunit            │
+                    └──────────┬───────────┘
+                               │
+                    ┌──────────▼───────────┐
+                    │      Dim_Model        │
+                    │──────────────────────│
+                    │ Model_ID    (PK)      │
+                    │ model_category        │
+                    └──────────────────────┘
+```
 
-The final model is ready for BI tools such as Power BI or other dashboarding platforms.
+### Table Descriptions
+
+| Table | Type | Description |
+|-------|------|-------------|
+| **Fact_Sales** | Fact | Core measurable sales events — revenue, units sold, revenue per unit |
+| **Dim_Branch** | Dimension | Branch locations and names for geographic analysis |
+| **Dim_Dealer** | Dimension | Dealer information for dealer-level performance tracking |
+| **Dim_Model** | Dimension | Car model details and category groupings |
+| **Dim_Date** | Dimension | Date breakdown (day, month, year) for time-series analysis |
 
 ---
 
-## Key Strengths
+## 💼 Business Value
 
-* End-to-end Azure pipeline design
-* Clear separation between initial and incremental loading
-* Medallion-style transformation approach
-* Star-schema modeling for analytics
-* Reusable Databricks notebooks
-* Watermark-based incremental processing
+This pipeline enables a business to answer critical sales questions directly from the analytical model:
 
----
+| Business Question | Answered By |
+|-------------------|-------------|
+| Which branches generate the highest revenue? | `Fact_Sales` ⋈ `Dim_Branch` |
+| Which dealers contribute the most units sold? | `Fact_Sales` ⋈ `Dim_Dealer` |
+| Which car model categories perform best? | `Fact_Sales` ⋈ `Dim_Model` |
+| How do sales trend over months and years? | `Fact_Sales` ⋈ `Dim_Date` |
+| What is the revenue per unit by model? | `Revperunit` in `Fact_Sales` |
 
-## How to Run
-
-1. Upload or store the raw data in the expected source location.
-2. Create the Azure SQL table `car_sales_source`.
-3. Configure the GitHub and SQL linked services in Azure Data Factory.
-4. Run the **initial load pipeline**.
-5. Create the ADLS Gen2 external location and storage credential in Databricks.
-6. Run the **silver notebook**.
-7. Run the **gold notebooks** to create the fact and dimension tables.
-8. Use the **incremental pipeline** for new data arrivals.
+The model is ready to plug directly into **Power BI**, **Tableau**, or any SQL-based analytics tool.
 
 ---
 
-## Notes
+## 🚀 How to Run
 
-* The project uses a consistent sales domain across all layers.
-* The notebook names and images clearly show the movement from raw ingestion to final modeling.
-* The pipeline design is suitable for portfolio presentation and interview discussion.
+Follow these steps in order to reproduce the full pipeline:
+
+### Prerequisites
+- Azure subscription with access to: Data Factory, SQL Database, Databricks, ADLS Gen2
+- GitHub access to the source CSV files
+- Databricks cluster configured
+
+### Steps
+
+```
+Step 1 — Azure SQL Setup
+  └─ Create the database
+  └─ Create table: car_sales_source
+  └─ Create watermark_table
+  └─ Create stored procedure: usp_update_watermark
+
+Step 2 — Azure Data Factory Setup
+  └─ Create GitHub HTTP linked service
+  └─ Create Azure SQL linked service
+  └─ Create & run the initial load pipeline
+
+Step 3 — ADLS Gen2 & Databricks Setup
+  └─ Create ADLS Gen2 storage account
+  └─ Configure Databricks external location
+  └─ Set up storage credential in Databricks
+
+Step 4 — Run Silver Notebook
+  └─ Open silver_notebook.ipynb in Databricks
+  └─ Run all cells to produce the Silver layer
+
+Step 5 — Run Gold Notebooks
+  └─ Run gold_dim_branch.ipynb
+  └─ Run gold_dim_date.ipynb
+  └─ Run gold_dim_dealer.ipynb
+  └─ Run gold_dim_model.ipynb
+  └─ Run gold_fact_sales.ipynb
+
+Step 6 — Schedule Incremental Loads
+  └─ Configure the incremental ADF pipeline on a schedule
+  └─ Set incremental_flag = '1' in Databricks workflow
+  └─ The watermark ensures only new records are loaded
+```
 
 ---
 
-## Author
+## ✅ Key Strengths
 
-**Mohamed Ahmed Diaa**
+- **End-to-end Azure pipeline** — from raw CSV to BI-ready star schema
+- **Medallion architecture** — clear Bronze / Silver / Gold separation of concerns
+- **Watermark-based incremental loading** — scalable, avoids full reloads
+- **Reusable Databricks notebooks** — each notebook is independent and parameterized
+- **Star-schema output** — optimized for analytics and fast aggregation queries
+- **Production patterns** — linked services, stored procedures, external locations, widget flags
 
 ---
 
-If you want this README adapted into a more professional portfolio version, I can turn it into a cleaner GitHub-ready Markdown layout with a stronger intro, a feature list, and a more polished “architecture” section.
+*Built with Azure Data Factory · Azure Databricks · Azure SQL Database · ADLS Gen2*
