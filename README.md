@@ -78,7 +78,7 @@ The project highlights both engineering best practices (incremental loading, med
 ---
 
 ## 🏗 Architecture
-(images/ARCH.png)
+![Architecture](./images/ARCH.png)
 ```
 ┌─────────────┐     ┌─────────────────────┐     ┌───────────────────┐
 │  GitHub     │────▶│  Azure Data Factory  │────▶│  Azure SQL        │
